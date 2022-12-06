@@ -7,20 +7,20 @@ ROCK = 0
 PAPER = 1
 SCISSORS = 2
 
+# Score part 1.
+LOSE = 0
+DRAW = 3
+WIN = 6
+
 # Input code lookup.
 LOOKUP = {
     "A": ROCK,
     "B": PAPER,
     "C": SCISSORS,
-    "X": ROCK,
-    "Y": PAPER,
-    "Z": SCISSORS,
+    "X": LOSE,
+    "Y": DRAW,
+    "Z": WIN,
 }
-
-# Score part 1.
-LOSE = 0
-DRAW = 3
-WIN = 6
 
 # Score part 2.
 SCORES = {
@@ -38,15 +38,24 @@ LEGEND = {
     SCISSORS: [LOSE, WIN, DRAW],
 }
 
+# Lookup table with columns =>
+# Rows: Opp play
+# Cols: Result (Lose, Draw, Win)
+REVERSE_LEGEND = {
+    ROCK: [SCISSORS, ROCK, PAPER],
+    PAPER: [ROCK, PAPER, SCISSORS],
+    SCISSORS: [PAPER, SCISSORS, ROCK],
+}
+
 def main():
     score = 0
     for line in sys.stdin:
         line = line.strip()
-        opp_in, you_in = line.split(" ")
+        opp_in, end_in = line.split(" ")
         opp_move = LOOKUP[opp_in]
-        you_move = LOOKUP[you_in]
-        score += LEGEND[you_move][opp_move]
-        score += SCORES[you_move]
+        end_state = LOOKUP[end_in]
+        score += end_state
+        score += SCORES[REVERSE_LEGEND[opp_move][end_state // 3]]
 
     print(f"You scored {score} total points.")
 

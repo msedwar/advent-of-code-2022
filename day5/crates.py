@@ -32,9 +32,12 @@ def execute_move(num_containers, from_loc, to_loc):
     containers = crates[from_loc][-num_containers:]
     crates[from_loc] = crates[from_loc][:-len(containers)] or []
 
-    # Reverse extend TO container.
-    for c in reversed(containers):
-        crates[to_loc].append(c)
+    # Extend TO container
+    crates[to_loc].extend(containers)
+
+    # # Reverse extend TO container.
+    # for c in reversed(containers):
+    #     crates[to_loc].append(c)
 
 def main():
     for line in sys.stdin:

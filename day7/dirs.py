@@ -8,6 +8,9 @@ from typing import Callable, List, Optional, Tuple
 
 MAX_TOTAL_SIZE = 100000
 
+TOTAL_SIZE = 70000000
+MIN_SIZE_NEEDED = 30000000
+
 def get_indent(indent: int) -> str:
     out_str = ""
     for _ in range(indent):
@@ -98,6 +101,9 @@ def collect_directories(current: Directory, predicate: Callable[[Directory], boo
         if isinstance(child, Directory):
             collect_directories(child, predicate, directories)
 
+def greater_than(size: int) -> Callable[[Directory], bool]:
+    return lambda node : node.size >= size 
+
 def less_than_max(node: Directory) -> bool:
     return node.size <= MAX_TOTAL_SIZE
 
@@ -113,13 +119,21 @@ def main():
             root = current
     
     fixup_tree_sizes(root)
-    directories: List[Directory] = []
-    collect_directories(root, less_than_max, directories)
+    unused_space = TOTAL_SIZE - root.size
+    assert unused_space < MIN_SIZE_NEEDED
+    required_space = MIN_SIZE_NEEDED - unused_space
 
-    total = 0
-    for directory in directories:
-        total += directory.size
-    print(f"Total size: {total}.")
+    print(f"Device has {unused_space} unused, requires {required_space} for update.")
+
+    directories: List[Directory] = []
+    collect_directories(root, greater_than(required_space), directories)
+
+    smallest = directories[0]
+    for node in directories[1:]:
+        if node.size < smallest.size:
+            smallest = node
+
+    print(f"Delete directory {smallest}")
 
 if __name__ == "__main__":
     main()

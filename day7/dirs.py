@@ -4,7 +4,7 @@ import sys
 
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
-from typing import List, Optional, Tuple
+from typing import Callable, List, Optional, Tuple
 
 MAX_TOTAL_SIZE = 100000
 
@@ -71,6 +71,7 @@ def parse_command(input_str: str, current: Optional[Directory]) -> Tuple[Directo
             assert current is not None
             for child in current.children:
                 if child.name == path:
+                    assert isinstance(child, Directory)
                     return (child, get_next_line())
             assert False
 
@@ -90,12 +91,15 @@ def fixup_tree_sizes(node: Directory):
         total_size += child.size
     node.size = total_size
 
-def collect_directories(current: Directory, directories: List[Directory]):
-    if current.size <= MAX_TOTAL_SIZE:
+def collect_directories(current: Directory, predicate: Callable[[Directory], bool], directories: List[Directory]):
+    if predicate(current):
         directories.append(current)
     for child in current.children:
         if isinstance(child, Directory):
-            collect_directories(child, directories)
+            collect_directories(child, predicate, directories)
+
+def less_than_max(node: Directory) -> bool:
+    return node.size <= MAX_TOTAL_SIZE
 
 def main():
     root: Optional[Directory] = None
@@ -110,7 +114,7 @@ def main():
     
     fixup_tree_sizes(root)
     directories: List[Directory] = []
-    collect_directories(root, directories)
+    collect_directories(root, less_than_max, directories)
 
     total = 0
     for directory in directories:

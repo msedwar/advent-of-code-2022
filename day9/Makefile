@@ -20,3 +20,7 @@ clean:
 .PHONY: test
 test: rope_sim
 	@./rope_sim < example.txt
+
+.PHONY: test2
+test2: rope_sim
+	@./rope_sim < example2.txt

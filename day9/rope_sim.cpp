@@ -2,12 +2,15 @@
 #include <cstdint>
 #include <iostream>
 #include <unordered_set>
+#include <vector>
 
 static const auto hash_int64 = std::hash<int64_t>{};
 
 // Position in a Cartesian grid.
 // X increases left to right, Y increases bottom to top.
 struct Position {
+    Position(int32_t x, int32_t y) : x(x), y(y) {}
+
     int32_t x;
     int32_t y;
 
@@ -34,30 +37,33 @@ enum class Direction : uint32_t {
 
 class RopeSim {
   public:
-    RopeSim() {
-        this->head = Position{0, 0};
-        this->tail = Position{0, 0};
-        this->visited.insert(this->tail);
-    };
+    RopeSim(size_t num_segments) {
+        assert(num_segments >= 2);
+        this->segments.reserve(num_segments);
+        for (size_t i = 0; i < num_segments; ++i) {
+            this->segments.emplace_back(0, 0);
+        }
+        this->visited.insert(getTail());
+    }
 
     void moveHead(Direction dir) {
         switch (dir) {
             case Direction::UP:
-                head.y++;
+                getHead().y++;
                 break;
             case Direction::DOWN:
-                head.y--;
+                getHead().y--;
                 break;
             case Direction::RIGHT:
-                head.x++;
+                getHead().x++;
                 break;
             case Direction::LEFT:
-                head.x--;
+                getHead().x--;
                 break;
         }
 
-        // Consequently move tail.
-        moveTail();
+        // Consequently move rest of rope.
+        simulateStep();
     }
 
     size_t getNumPositionsVisited() {
@@ -65,13 +71,25 @@ class RopeSim {
     }
 
   private:
-    bool isHeadTouchingTail() {
+    Position& getHead() {
+        return segments[0];
+    }
+
+    Position& getTail() {
+        return segments[segments.size() - 1];
+    }
+
+    bool areTouching(const Position& head, const Position& tail) {
         return abs(head.x - tail.x) <= 1 && abs(head.y - tail.y) <= 1;
     }
 
-    void moveTail() {
+    void moveSegment(size_t index) {
+        assert(index > 0 && index < segments.size());
+        Position& head = segments[index - 1];
+        Position& tail = segments[index];
+
         // Do nothing if head and tail are touching.
-        if (isHeadTouchingTail()) {
+        if (areTouching(head, tail)) {
             return;
         }
 
@@ -112,15 +130,23 @@ class RopeSim {
             }
         }
 
-        assert(isHeadTouchingTail());
+        // Update tail position.
+        assert(areTouching(head, tail));
+    }
+
+    void simulateStep() {
+        for (size_t i = 1; i < segments.size(); ++i) {
+            moveSegment(i);
+        }
+
+        Position& tail = getTail();
         if (visited.find(tail) == visited.end()) {
             visited.insert(tail);
         }
     }
 
     std::unordered_set<Position, HashPosition> visited;
-    Position head;
-    Position tail;  
+    std::vector<Position> segments;
 };
 
 Direction parse_direction(char dir) {
@@ -153,7 +179,7 @@ void parse_movements(std::istream& input, RopeSim& sim) {
 }
 
 int main() {
-    RopeSim sim;
+    RopeSim sim{10};
     parse_movements(std::cin, sim);
 
     std::cout << "Tail visited positions: " << sim.getNumPositionsVisited() << std::endl;

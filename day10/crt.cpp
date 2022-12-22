@@ -1,11 +1,12 @@
 #include <cassert>
 #include <cstdint>
 #include <iostream>
+#include <sstream>
 #include <string>
 
 class Crt {
   public:
-    Crt() : regX(1), cycle(1), signalSum(0) {}
+    Crt() : regX(1), cycle(1) {}
 
     void addX(int64_t v) {
         doCycle();
@@ -17,22 +18,35 @@ class Crt {
         doCycle();
     }
 
-    int64_t getSignalSum() {
-        return signalSum;
+    const std::string getDisplay() {
+        return display.str();
     }
 
   private:
+    size_t getDrawColumn() {
+        return (cycle - 1) % 40;
+    }
+
+    bool isSpriteLit() {
+        int64_t column = getDrawColumn();
+        int64_t spriteL = regX - 1;
+        int64_t spriteR = regX + 1;
+        return column >= spriteL && column <= spriteR;
+    }
+
     void doCycle() {
-        if (cycle >= 20 && (cycle - 20) % 40 == 0) {
-            signalSum += regX * cycle;
+        display << (isSpriteLit() ? "#" : ".");
+
+        if (getDrawColumn() == 39) {
+            display << std::endl;
         }
 
         cycle++;
     }
 
+    std::stringstream display;
     int64_t regX;
     size_t cycle;
-    int64_t signalSum;
 };
 
 void parseInstr(Crt& crt, const std::string& line) {
@@ -56,7 +70,7 @@ int main() {
         parseInstr(crt, line);
     }
 
-    std::cout << "Sum of signal strengths: " << crt.getSignalSum() << std::endl;
+    std::cout << crt.getDisplay();
 
     return 0;
 }

@@ -90,6 +90,7 @@ Element parsePacket(const std::string& input) {
     return root;
 }
 
+[[maybe_unused]]
 bool parsePair(std::istream& input, Element& left, Element& right) {
     std::string line;
 
@@ -155,30 +156,60 @@ Comparison isListValid(const std::vector<Element>& left_list, const std::vector<
 bool isPairValid(const Element& left, const Element& right) {
     assert(left.tag == ElementType::LIST);
     assert(right.tag == ElementType::LIST);
-    auto result = isListValid(left.list, right.list);
-    assert(result != Comparison::EQUAL);
-    return result == Comparison::VALID;
+    return isListValid(left.list, right.list) == Comparison::VALID;
+}
+
+Element createDistressPacket(size_t distress_integer) {
+    Element num;
+    num.tag = ElementType::INTEGER;
+    num.integer = distress_integer;
+
+    Element inner;
+    inner.tag = ElementType::LIST;
+    inner.list.push_back(num);
+
+    Element root;
+    root.tag = ElementType::LIST;
+    root.list.push_back(inner);
+
+    return root;
+}
+
+bool isDividerPacket(const Element& packet, const Element& divider) {
+    assert(packet.tag == ElementType::LIST);
+    assert(divider.tag == ElementType::LIST);
+    return isListValid(divider.list, packet.list) == Comparison::EQUAL;
 }
 
 int main() {
-    size_t index = 1;
-    size_t sum = 0;
-    Element left;
-    Element right;
-    while (parsePair(std::cin, left, right)) {
-        bool valid = isPairValid(left, right);
-        std::cout << "Compare ";
-        printElement(left);
-        std::cout << " to ";
-        printElement(right);
-        std::cout << std::endl << " is " << (valid ? "VALID" : "INVALID") << std::endl;
-        if (valid) {
-            sum += index;
+    auto distress2 = createDistressPacket(2);
+    auto distress6 = createDistressPacket(6);
+
+    std::vector<Element> packets;
+    std::string line;
+    while (std::getline(std::cin, line)) {
+        if (line.empty()) {
+            continue;
         }
-        index++;
+        packets.push_back(parsePacket(line));
+    }
+    packets.push_back(distress2);
+    packets.push_back(distress6);
+
+    // Get divider packet indices.
+    std::sort(packets.begin(), packets.end(), isPairValid);
+
+    size_t key = 0;
+    for (size_t i = 0; i < packets.size(); ++i) {
+        if (isDividerPacket(packets[i], distress2)) {
+            key = (i + 1);
+        } else if (isDividerPacket(packets[i], distress6)) {
+            key *= (i + 1);
+            break;
+        }
     }
 
     std::cout << std::endl;
-    std::cout << "Sum of valid packet pair indices: " << sum << std::endl;
+    std::cout << "Decoder key: " << key << std::endl;
     return 0;
 }

@@ -136,7 +136,7 @@ void addNeighbor(
 ) {
     if (!terrain.isValidCoord(coord)
         || terrain.isVisited(coord)
-        || terrain.getHeight(coord) > height + 1) {
+        || !(terrain.getHeight(coord) >= height || terrain.getHeight(coord) + 1 == height)) {
         return;
     }
 
@@ -146,20 +146,22 @@ void addNeighbor(
 
 // A* path search would be faster, but BFS is simpler to implement.
 size_t shortestPath(Terrain& terrain) {
-    terrain.markVisited(terrain.getStart(), 0);
+    terrain.markVisited(terrain.getEnd(), 0);
 
     std::queue<Coordinate> queue;
-    queue.push(terrain.getStart());
+    queue.push(terrain.getEnd());
 
     while (!queue.empty()) {
         Coordinate current = queue.front();
         queue.pop();
-        if (current == terrain.getEnd()) {
-            break;
-        }
 
         auto height = terrain.getHeight(current);
         auto distance = terrain.getDistance(current);
+
+        // Reached starting point.
+        if (height == 0) {
+            return static_cast<size_t>(distance);
+        }
 
         // Add neighbors.
         addNeighbor(terrain, queue, Coordinate{current.x, current.y + 1}, height, distance);
@@ -168,9 +170,7 @@ size_t shortestPath(Terrain& terrain) {
         addNeighbor(terrain, queue, Coordinate{current.x - 1, current.y}, height, distance);
     }
 
-    uint32_t distance = terrain.getDistance(terrain.getEnd());
-    assert(distance != UINT32_MAX);
-    return static_cast<size_t>(distance);
+    throw std::runtime_error("Could not find path");
 }
 
 int main() {

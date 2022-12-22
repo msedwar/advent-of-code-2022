@@ -6,7 +6,7 @@
 #include <vector>
 
 // Number of simulation rounds.
-constexpr size_t NUM_ROUNDS = 20;
+constexpr size_t NUM_ROUNDS = 10000;
 
 // List item delimiter.
 constexpr auto LIST_DELIM = ", ";
@@ -53,6 +53,7 @@ class Monkey {
         test(test),
         true_cond(true_cond),
         false_cond(false_cond),
+        lcd(1),
         inspection_count(0)
     {}
 
@@ -60,8 +61,16 @@ class Monkey {
         return name;
     }
 
+    int64_t getTestCondition() const {
+        return test;
+    }
+
     size_t getInspectionCount() const {
         return inspection_count;
+    }
+
+    void setLCD(int64_t lcd) {
+        this->lcd = lcd;
     }
 
     void receiveThrownItem(size_t worry_level) {
@@ -84,12 +93,13 @@ class Monkey {
     size_t true_cond;
     size_t false_cond;
 
+    int64_t lcd;
     size_t inspection_count;
 
     void inspectItem(std::vector<Monkey>& monkies, size_t worry_level) {
         inspection_count++;
         worry_level = op(worry_level);
-        worry_level /= 3;
+        worry_level %= lcd;
 
         if (worry_level % test == 0) {
             monkies[true_cond].receiveThrownItem(worry_level);
@@ -169,6 +179,16 @@ void doRound(std::vector<Monkey>& monkies) {
     }
 }
 
+void printInspectionCounts(size_t round, const std::vector<Monkey>& monkies) {
+    std::cout << "== Round " << round << " ==" << std::endl;
+    for (const auto& monkey : monkies) {
+        std::cout << monkey.getName()
+            << " inspected items " << monkey.getInspectionCount()
+            << " times." << std::endl;
+    }
+    std::cout << std::endl;
+}
+
 int main() {
     std::vector<Monkey> monkies;
 
@@ -191,8 +211,22 @@ int main() {
     // Must have at least 2 monkies to calculate monkey business.
     assert(monkies.size() >= 2);
 
-    for (size_t round = 0; round < NUM_ROUNDS; ++round) {
+    // Compute LCD for all monkies.
+    int64_t lcd = 1;
+    for (const auto& monkey : monkies) {
+        lcd *= monkey.getTestCondition();
+    }
+
+    // Set LCD for all monkies.
+    for (auto& monkey : monkies) {
+        monkey.setLCD(lcd);
+    }
+
+    for (size_t round = 1; round <= NUM_ROUNDS; ++round) {
         doRound(monkies);
+        if (round == 1 || round == 20 || round == 1000 || round == 10000) {
+            printInspectionCounts(round, monkies);
+        }
     }
 
     // Print results.
@@ -200,9 +234,6 @@ int main() {
     inspection_counts.reserve(monkies.size());
     for (const auto& monkey : monkies) {
         inspection_counts.push_back(monkey.getInspectionCount());
-        std::cout << monkey.getName()
-            << " inspected items " << monkey.getInspectionCount()
-            << " times." << std::endl;
     }
 
     // Sort inspection counts, high to low.

@@ -57,9 +57,14 @@ def doRound(round: int, elves: List[Elf]):
             del proposedCoordMap[move]
     
     # Move elves.
+    moves = 0
     for move, elf in proposedCoordMap.items():
-        elf.x = move[0]
-        elf.y = move[1]
+        if move[0] != elf.x or move[1] != elf.y:
+            moves += 1
+            elf.x = move[0]
+            elf.y = move[1]
+    
+    return moves > 0
 
 def getBounds(elves: List[Elf]) -> Tuple[int, int, int, int]:
     minX = 0
@@ -88,13 +93,11 @@ def main():
                 elves.append(Elf(i, row))
         row += 1
 
-    for round in range(10):
-        doRound(round, elves)
+    round = 0
+    while doRound(round, elves):
+        round += 1
     
-    (minX, maxX, minY, maxY) = getBounds(elves)
-    total = (maxX - minX + 1) * (maxY - minY + 1)
-    total -= len(elves)
-    print(f"Square area: {total}")
+    print(f"No elves moved in round {round + 1}")
         
 
 if __name__ == "__main__":

@@ -43,7 +43,7 @@ class Cave {
             if (start.x > max_width) {
                 max_width = start.x;
             }
-            if (end.y > height) {
+            if (end.y >= height) {
                 addRows(end.y - height + 2);
             }
 
@@ -62,7 +62,7 @@ class Cave {
             if (end.x > max_width) {
                 max_width = end.x;
             }
-            if (start.y > height) {
+            if (start.y >= height) {
                 addRows(start.y - height + 2);
             }
 
@@ -99,6 +99,9 @@ class Cave {
 
     bool spawnSand() {
         Coordinate position = Coordinate{500, 0};
+        if (getTileAt(position.x, position.y) != Tile::SAND_SOURCE) {
+            return false;
+        }
 
         while (position.y + 1 < height) {
             if (isTileEmpty(position.x, position.y + 1)) {
@@ -106,15 +109,24 @@ class Cave {
             } else if (isTileEmpty(position.x - 1, position.y + 1)) {
                 position.x--;
                 position.y++;
+
+                if (position.x < min_width) {
+                    min_width = position.x;
+                }
             } else if (isTileEmpty(position.x + 1, position.y + 1)) {
                 position.x++;
                 position.y++;
+
+                if (position.x > max_width) {
+                    max_width = position.x;
+                }
             } else {
                 map[position.y * width + position.x] = Tile::SAND;
                 return true;
             }
         }
-        return false;
+        map[position.y * width + position.x] = Tile::SAND;
+        return true;
     }
 
 private:
@@ -175,7 +187,7 @@ std::vector<Coordinate> parseLine(const std::string& line) {
 }
 
 int main() {
-    Cave cave(1024, 2);
+    Cave cave(1024, 3);
     std::string line;
     while (std::getline(std::cin, line)) {
         auto points = parseLine(line);

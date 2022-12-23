@@ -5,7 +5,7 @@
 #include <unordered_set>
 #include <vector>
 
-constexpr int64_t CHECK_ROW = 2000000;
+constexpr int64_t MAX_COORD = 4000000;
 
 // Quick and dirty pair hashing function.
 struct HashPair {
@@ -69,39 +69,52 @@ void parse_sensors(
     }
 }
 
+void get_max_bounds(
+        std::vector<Sensor>& sensors,
+        Bounds& bounds
+) {
+    for (const auto& sensor : sensors) {
+        if (sensor.x > bounds.maxX) {
+            bounds.maxX = sensor.x;
+        }
+        if (sensor.y > bounds.maxY) {
+            bounds.maxY = sensor.y;
+        }
+    }
+}
+
+int64_t tuning_freq(const Bounds& bounds, const std::vector<Sensor>& sensors) {
+    bool found;
+    for (int64_t y = bounds.minY; y < bounds.maxY; ++y) {
+        for (int64_t x = bounds.minX; x < bounds.maxX; ++x) {
+            found = true;
+            for (const auto& sensor : sensors) {
+                if (manhattan_distance(x, y, sensor.x, sensor.y) <= sensor.range) {
+                    size_t y_dist = static_cast<size_t>(abs(sensor.y - y));
+                    int64_t x_range = sensor.range - y_dist;
+                    x = sensor.x + x_range;
+                    found = false;
+                    break;
+                }
+            }
+            if (found) {
+                return (x * MAX_COORD) + y;
+            }
+        }
+    }
+    return 0;
+}
+
 int main() {
     std::vector<Sensor> sensors;
     std::unordered_set<std::pair<int64_t, int64_t>, HashPair> beacons;
     parse_sensors(std::cin, sensors, beacons);
 
-    std::unordered_set<int64_t> unoccupied;
+    Bounds bounds{0, 0, 0, 0};
+    get_max_bounds(sensors, bounds);
+    bounds.maxX = std::min(bounds.maxX, MAX_COORD);
+    bounds.maxY = std::min(bounds.maxY, MAX_COORD);
 
-    for (const auto& sensor : sensors) {
-        if (sensor.y == CHECK_ROW) {
-            if (unoccupied.find(sensor.x) == unoccupied.end()) {
-                unoccupied.insert(sensor.x);
-            }
-        }
-
-        size_t y_dist = static_cast<size_t>(abs(sensor.y - CHECK_ROW));
-
-        if (y_dist <= sensor.range) {
-            int64_t x_range = sensor.range - y_dist;
-            for (int64_t x = sensor.x - x_range; x <= sensor.x + x_range; ++x) {
-                if (unoccupied.find(x) == unoccupied.end()) {
-                    unoccupied.insert(x);
-                }
-            }
-        }
-    }
-
-    for (const auto& beacon : beacons) {
-        if (beacon.second == CHECK_ROW && unoccupied.find(beacon.first) != unoccupied.end()) {
-            unoccupied.erase(beacon.first);
-        }
-    }
-
-    std::cout << "Positions at row " << CHECK_ROW
-        << " that cannot contain a beacon: " << unoccupied.size() << std::endl;
+    std::cout << tuning_freq(bounds, sensors) << std::endl;
     return 0;
 }

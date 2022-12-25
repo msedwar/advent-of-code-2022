@@ -6,7 +6,7 @@ edition = "2021"
 [profile.release]
 debug = true
 opt-level = 3
-lto = true
+lto = false
 
 [profile.dev]
 debug = true

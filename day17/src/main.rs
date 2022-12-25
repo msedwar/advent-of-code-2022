@@ -1,10 +1,11 @@
 #![feature(test)]
 extern crate test;
 
-use std::collections::VecDeque;
+use std::collections::{HashMap, VecDeque};
 
-const TOTAL_ROCKS: usize = 1000000000000; //1000000000000;
+const TOTAL_ROCKS: usize = 1000000000000;
 const BOARD_WIDTH: usize = 7;
+const SEARCH_HEIGHT: usize = 50;
 
 const HLINE_BOX: [(usize, usize); 4] = [(0, 0), (1, 0), (2, 0), (3, 0)];
 const CROSS_BOX: [(usize, usize); 5] = [(1, 0), (0, 1), (1, 1), (2, 1), (1, 2)];
@@ -69,6 +70,8 @@ struct Board<'a> {
     highest_rock: usize,
     jet_index: usize,
     jets: &'a [Jet],
+    state_map: HashMap<String, usize>,
+    heights: Vec<usize>,
 }
 
 impl<'a> Board<'a> {
@@ -80,18 +83,16 @@ impl<'a> Board<'a> {
             highest_rock: 0,
             jet_index: 0,
             jets: jets,
+            state_map: HashMap::new(),
+            heights: Vec::new(),
         }
     }
 
-    pub fn get_highest_block(&self) -> usize {
-        self.highest_rock
+    pub fn get_highest_rock_in_round(&self, round: usize) -> usize {
+        self.heights[round]
     }
 
-    pub fn drop_next_rock(&mut self, index: usize) {
-        if index % 10000000 == 0 {
-            println!("Progress: {:.5}%", (index as f64) / (TOTAL_ROCKS as f64) * 100f64)
-        }
-
+    pub fn drop_next_rock(&mut self, index: usize) -> Option<usize> {
         if self.height < self.highest_rock + 4 {
             self.extend_rows(self.highest_rock + 1000);
         }
@@ -103,7 +104,29 @@ impl<'a> Board<'a> {
         loop {
             self.push_rock(rock, &mut rock_x, rock_y);
             if self.drop_rock(rock, rock_x, &mut rock_y) {
-                return;
+                self.heights.push(self.highest_rock);
+                if self.highest_rock > SEARCH_HEIGHT {
+                    let mut key: String = String::new();
+                    key += &((index % 5).to_string() + "_" + &(self.jet_index % self.jets.len()).to_string() + "_");
+        
+                    for y in (self.highest_rock - SEARCH_HEIGHT)..self.highest_rock {
+                        let mut row_hash: usize = 0;
+                        for x in 0..BOARD_WIDTH {
+                            if self.get_cell_at(x, y) {
+                                row_hash += 1 << x;
+                            }
+                        }
+                        key += &row_hash.to_string();
+                    }
+
+                    if self.state_map.contains_key(&key) {
+                        return Some(*self.state_map.get(&key).unwrap());
+                    } else {
+                        self.state_map.insert(key, index);
+                        return None;
+                    }
+                }
+                return None;
             }
         }
     }
@@ -183,10 +206,14 @@ impl<'a> Board<'a> {
     fn extend_rows(&mut self, new_height: usize) {
         // Row elision.
         if self.highest_rock - self.offset > 2000 {
-            let row = self.get_highest_complete_row();
+            let mut row = self.get_highest_complete_row();
             if row > self.offset + 1 {
+                if self.highest_rock - (row - 1) < SEARCH_HEIGHT {
+                    row = self.highest_rock - SEARCH_HEIGHT - 1;
+                }
                 self.rocks.drain(0..(row - 1 - self.offset) * BOARD_WIDTH);
                 self.offset = row - 1;
+                debug_assert!(self.highest_rock - self.offset >= SEARCH_HEIGHT);
                 debug_assert!(self.rocks.len() == (self.height - self.offset) * BOARD_WIDTH);
             }
         }
@@ -255,11 +282,30 @@ fn main() {
     parse_jets(&mut jets);
     let mut board: Board = Board::new(&jets);
 
-    for round in 0..TOTAL_ROCKS {
-        board.drop_next_rock(round);
-    }
+    let mut repetition_round_a: usize = 0;
+    let mut repetition_round_b: usize = 0;
 
-    println!("Highest rock at {}", board.get_highest_block());
+    for round in 0..2000 {
+         match board.drop_next_rock(round) {
+            Some(r) => {
+                repetition_round_a = r;
+                repetition_round_b = round;
+                break;
+            },
+            _ => (),
+         }
+    }
+    assert!(repetition_round_a > 0, "Could not find repetition");
+    let highest_rock_a = board.get_highest_rock_in_round(repetition_round_a);
+    let highest_rock_b = board.get_highest_rock_in_round(repetition_round_b);
+
+    let multiple: usize = (TOTAL_ROCKS - repetition_round_a) / (repetition_round_b - repetition_round_a);
+    let remainder: usize = (TOTAL_ROCKS - repetition_round_a) % (repetition_round_b - repetition_round_a);
+
+    let mut base: usize = multiple * (highest_rock_b - highest_rock_a);
+    base += board.get_highest_rock_in_round(repetition_round_a + remainder - 1);
+
+    println!("Highest rock at {}", base);
 }
 
 #[cfg(test)]

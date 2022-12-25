@@ -1,4 +1,9 @@
-const TOTAL_ROCKS: usize = 2022;
+#![feature(test)]
+extern crate test;
+
+use std::collections::VecDeque;
+
+const TOTAL_ROCKS: usize = 1000000000000; //1000000000000;
 const BOARD_WIDTH: usize = 7;
 
 const HLINE_BOX: [(usize, usize); 4] = [(0, 0), (1, 0), (2, 0), (3, 0)];
@@ -35,6 +40,16 @@ impl Rock {
         }
     }
 
+    pub fn get_height(&self) -> usize {
+        match self {
+            Rock::HLine => 1,
+            Rock::Cross => 3,
+            Rock::ReverseL => 3,
+            Rock::VLine => 4,
+            Rock::Square => 2,
+        }
+    }
+
     pub fn get_collision_box(&self) -> &'static [(usize, usize)] {
         match self {
             Rock::HLine => &HLINE_BOX,
@@ -48,8 +63,10 @@ impl Rock {
 
 #[derive(Debug)]
 struct Board<'a> {
-    rocks: Vec<bool>,
+    rocks: VecDeque<bool>,
+    offset: usize,
     height: usize,
+    highest_rock: usize,
     jet_index: usize,
     jets: &'a [Jet],
 }
@@ -57,59 +74,77 @@ struct Board<'a> {
 impl<'a> Board<'a> {
     pub fn new(jets: &'a [Jet]) -> Self {
         Board {
-            rocks: Vec::new(),
+            rocks: VecDeque::new(),
+            offset: 0,
             height: 0,
+            highest_rock: 0,
             jet_index: 0,
             jets: jets,
         }
     }
 
-    pub fn drop_rock(&mut self, index: usize) {
-        let highest_rock = self.get_heighest_rock();
+    pub fn get_highest_block(&self) -> usize {
+        self.highest_rock
+    }
 
-        if self.height < highest_rock + 4 {
-            let num_cells: usize = (highest_rock + 4 - self.height) * BOARD_WIDTH;
-            self.rocks.extend(std::iter::repeat(false).take(num_cells));
-            self.height = highest_rock + 4;
+    pub fn drop_next_rock(&mut self, index: usize) {
+        if index % 10000000 == 0 {
+            println!("Progress: {:.5}%", (index as f64) / (TOTAL_ROCKS as f64) * 100f64)
+        }
+
+        if self.height < self.highest_rock + 4 {
+            self.extend_rows(self.highest_rock + 1000);
         }
 
         let rock: Rock = unsafe { std::mem::transmute(index % 5) };
         let mut rock_x: usize = 2;
-        let mut rock_y: usize = self.height - 1;
-        assert!(!self.collides(rock, rock_x, rock_y));
+        let mut rock_y: usize = self.highest_rock + 3;
 
         loop {
-            // Push rock.
-            match self.get_next_jet() {
-                Jet::Left => {
-                    if rock_x > 0 && !self.collides(rock, rock_x - 1, rock_y) {
-                        rock_x -= 1;
-                    }
-                }
-                Jet::Right => {
-                    if rock_x + rock.get_width() < BOARD_WIDTH
-                        && !self.collides(rock, rock_x + 1, rock_y)
-                    {
-                        rock_x += 1;
-                    }
-                }
-            }
-
-            // Drop rock.
-            if rock_y > 0 && !self.collides(rock, rock_x, rock_y - 1) {
-                rock_y -= 1;
-            } else {
-                self.freeze(rock, rock_x, rock_y);
-                break;
+            self.push_rock(rock, &mut rock_x, rock_y);
+            if self.drop_rock(rock, rock_x, &mut rock_y) {
+                return;
             }
         }
     }
 
+    #[inline(always)]
+    fn push_rock(&mut self, rock: Rock, rock_x: &mut usize, rock_y: usize) {
+        match self.get_next_jet() {
+            Jet::Left => {
+                if *rock_x > 0 && !self.collides(rock, *rock_x - 1, rock_y) {
+                    *rock_x -= 1;
+                }
+            }
+            Jet::Right => {
+                if *rock_x + rock.get_width() < BOARD_WIDTH
+                    && !self.collides(rock, *rock_x + 1, rock_y)
+                {
+                    *rock_x += 1;
+                }
+            }
+        }
+    }
+
+    #[inline(always)]
+    fn drop_rock(&mut self, rock: Rock, rock_x: usize, rock_y: &mut usize) -> bool {
+        if *rock_y > 0 && !self.collides(rock, rock_x, *rock_y - 1) {
+            *rock_y -= 1;
+            return false;
+        } else {
+            self.freeze(rock, rock_x, *rock_y);
+            return true;
+        }
+    }
+
     fn collides(&self, rock: Rock, rx: usize, ry: usize) -> bool {
+        if rx + rock.get_width() - 1 >= BOARD_WIDTH {
+            return true;
+        }
         for (x, y) in rock.get_collision_box() {
             let bx = x + rx;
             let by = y + ry;
-            if bx >= BOARD_WIDTH || (by < self.height && self.rocks[by * BOARD_WIDTH + bx]) {
+            if by < self.height && self.get_cell_at(bx, by) {
                 return true;
             }
         }
@@ -120,25 +155,60 @@ impl<'a> Board<'a> {
         for (x, y) in rock.get_collision_box() {
             let bx = x + rx;
             let by = y + ry;
-            self.rocks[by * BOARD_WIDTH + bx] = true;
+            *self.get_ref_cell_at(bx, by) = true;
+        }
+        let height_last = rock.get_height() + ry;
+        if height_last > self.highest_rock {
+            self.highest_rock = height_last;
         }
     }
 
+    #[inline(always)]
     fn get_next_jet(&mut self) -> Jet {
         let ret = self.jets[self.jet_index % self.jets.len()];
         self.jet_index += 1;
         ret
     }
 
-    pub fn get_heighest_rock(&self) -> usize {
-        for y in (0..self.height).rev() {
-            for x in 0..BOARD_WIDTH {
-                if self.rocks[y * BOARD_WIDTH + x] {
-                    return y + 1;
+    #[inline(always)]
+    fn get_cell_at(&self, x: usize, y: usize) -> bool {
+        self.rocks[(y - self.offset) * BOARD_WIDTH + x]
+    }
+
+    #[inline(always)]
+    fn get_ref_cell_at(&mut self, x: usize, y: usize) -> &mut bool {
+        &mut self.rocks[(y - self.offset) * BOARD_WIDTH + x]
+    }
+
+    fn extend_rows(&mut self, new_height: usize) {
+        // Row elision.
+        if self.highest_rock - self.offset > 2000 {
+            let row = self.get_highest_complete_row();
+            if row > self.offset + 1 {
+                self.rocks.drain(0..(row - 1 - self.offset) * BOARD_WIDTH);
+                self.offset = row - 1;
+                debug_assert!(self.rocks.len() == (self.height - self.offset) * BOARD_WIDTH);
+            }
+        }
+
+        // Rock extension.
+        let num_cells: usize = (new_height - self.height) * BOARD_WIDTH;
+        self.rocks.extend(std::iter::repeat(false).take(num_cells));
+        self.height = new_height;
+    }
+
+    fn get_highest_complete_row(&self) -> usize {
+        let mut min: usize = self.height - 1;
+
+        for x in 0..BOARD_WIDTH {
+            for y in (self.offset..self.height).rev() {
+                if self.get_cell_at(x, y) {
+                    min = std::cmp::min(min, y);
+                    break;
                 }
             }
         }
-        return 0;
+        return min;
     }
 }
 
@@ -150,10 +220,10 @@ impl std::fmt::Display for Board<'_> {
                 write!(
                     f,
                     "{}",
-                    if self.rocks[y * BOARD_WIDTH + x] {
+                    if self.get_cell_at(x, y) {
                         "#"
                     } else {
-                        " "
+                        "."
                     }
                 )?;
             }
@@ -186,8 +256,38 @@ fn main() {
     let mut board: Board = Board::new(&jets);
 
     for round in 0..TOTAL_ROCKS {
-        board.drop_rock(round);
+        board.drop_next_rock(round);
     }
 
-    println!("Highest rock at {}", board.get_heighest_rock());
+    println!("Highest rock at {}", board.get_highest_block());
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use test::Bencher;
+
+    #[bench]
+    fn bench_1000(b: &mut Bencher) {
+        let jets: Vec<Jet> = vec![Jet::Left, Jet::Left, Jet::Right, Jet::Left, Jet::Right];
+        
+        b.iter(|| {
+            let mut board: Board = Board::new(&jets);
+            for round in 0..1000 {
+                board.drop_next_rock(round);
+            }
+        });
+    }
+
+    #[bench]
+    fn bench_1(b: &mut Bencher) {
+        let jets: Vec<Jet> = vec![Jet::Left, Jet::Left, Jet::Right, Jet::Left, Jet::Right];
+        let mut board: Board = Board::new(&jets);
+        let mut round: usize = 0;
+        
+        b.iter(|| {
+            board.drop_next_rock(round);
+            round += 1;
+        });
+    }
 }
